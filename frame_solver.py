@@ -39,6 +39,39 @@ class FrameElement:
         self.second_moment_of_inertia = second_moment_of_inertia
         self.elastic_modulus = elastic_modulus
 
+    def get_local_stiffness(self):
+        L = np.linalg.norm(self.end.position - self.start.position)
+
+        beta = self.area * L**2 / self.second_moment_of_inertia
+
+        coef = self.elastic_modulus * self.second_moment_of_inertia / (L**3)
+
+        return coef * np.array(
+            [
+                [beta, 0, 0, -beta, 0, 0],
+                [0, 12, 6 * L, 0, -12, 6 * L],
+                [0, 6 * L, 4 * L**2, 0, -6 * L, 2 * L**2],
+                [-beta, 0, 0, beta, 0, 0],
+                [0, -12, -6 * L, 0, 12, -6 * L],
+                [0, 6 * L, 2 * L**2, 0, -6 * L, 4 * L**2],
+            ]
+        )
+
+    def get_transformation_matrix(self):
+        vector = self.end.position - self.start.position
+        alpha = math.atan2(vector[1], vector[0])
+
+        s = math.sin(alpha)
+        c = math.cos(alpha)
+
+        inner = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
+
+        return np.block([[inner, np.zeros_like(inner)], [np.zeros_like(inner), inner]])
+
+    def get_global_stiffness(self):
+        _lambda = self.get_transformation_matrix()
+        return _lambda.T @ self.get_local_stiffness() @ _lambda
+
 
 def solve_frame(elements: list[FrameElement]):
     nodes = list(dict.fromkeys([x for e in elements for x in (e.start, e.end)]))
@@ -62,9 +95,6 @@ def solve_frame(elements: list[FrameElement]):
             Q = np.append(Q, node.moment)
             moment_indices[node.name] = len(Q) - 1
 
-    n_dof = len(Q)
-
-    K_n = []
     K_hat_n = []
     lambda_n = []
     A_n = []
@@ -75,43 +105,7 @@ def solve_frame(elements: list[FrameElement]):
         start = element.start
         end = element.end
 
-        vector = end.position - start.position
-        alpha = math.atan2(vector[1], vector[0])
-
-        L = np.linalg.norm(vector)
-
-        beta = element.area * L**2 / element.second_moment_of_inertia
-
-        coef = element.elastic_modulus * element.second_moment_of_inertia / (L**3)
-
-        K = coef * np.array(
-            [
-                [beta, 0, 0, -beta, 0, 0],
-                [0, 12, 6 * L, 0, -12, 6 * L],
-                [0, 6 * L, 4 * L**2, 0, -6 * L, 2 * L**2],
-                [-beta, 0, 0, beta, 0, 0],
-                [0, -12, -6 * L, 0, 12, -6 * L],
-                [0, 6 * L, 2 * L**2, 0, -6 * L, 4 * L**2],
-            ]
-        )
-
-        K_n.append(K)
-
-        s = math.sin(alpha)
-        c = math.cos(alpha)
-
-        inner = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
-
-        lambda_matrix = np.block(
-            [[inner, np.zeros_like(inner)], [np.zeros_like(inner), inner]]
-        )
-
-        K_hat = lambda_matrix.T @ K @ lambda_matrix
-
-        K_hat_n.append(K_hat)
-        lambda_n.append(lambda_matrix)
-
-        A = np.zeros((n_dof, 6))
+        A = np.zeros((len(Q), 6))
 
         if start.name in x_indices:
             A[x_indices[start.name], 0] = 1
@@ -133,7 +127,7 @@ def solve_frame(elements: list[FrameElement]):
 
         A_n.append(A)
 
-        K_global_n.append(A @ K_hat @ A.T)
+        K_global_n.append(A @ element.get_global_stiffness() @ A.T)
 
     K_global = sum(K_global_n)
 
