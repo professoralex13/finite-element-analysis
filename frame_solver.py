@@ -141,6 +141,7 @@ class FrameElement:
 class FrameSystem:
     nodes: dict[str, Node] = {}
     elements: list[FrameElement] = []
+    weld_pairs: list[tuple[FrameElement, FrameElement]] = []
 
     dof_deflections: np.ndarray
 
@@ -165,12 +166,16 @@ class FrameSystem:
 
         return element
 
+    def weld_elements(self, element_1: FrameElement, element_2: FrameElement):
+        self.weld_pairs.append((element_1, element_2))
+
     def solve(self):
         Q = np.array([])
 
         x_indices = {}
         y_indices = {}
-        moment_indices = {}
+        start_moment_indices = {}
+        end_moment_indices = {}
 
         for node in self.nodes.values():
             if node.applied_x is not None:
@@ -181,11 +186,47 @@ class FrameSystem:
                 Q = np.append(Q, node.applied_y)
                 y_indices[node.name] = len(Q) - 1
 
-            if node.applied_moment is not None:
-                Q = np.append(Q, node.applied_moment)
-                moment_indices[node.name] = len(Q) - 1
+        for i, element in enumerate(self.elements):
+            start = element.start
+            end = element.end
 
-        for element in self.elements:
+            welds = [
+                x for e in self.weld_pairs for x in e if element in e and element != x
+            ]
+
+            if start.applied_moment is not None:
+                existing_index = None
+                for e in welds:
+                    index = self.elements.index(e)
+                    if start == e.start and index in start_moment_indices:
+                        existing_index = start_moment_indices[index]
+
+                    if start == e.end and index in end_moment_indices:
+                        existing_index = end_moment_indices[index]
+
+                if existing_index is None:
+                    Q = np.append(Q, start.applied_moment)
+                    start_moment_indices[i] = len(Q) - 1
+                else:
+                    start_moment_indices[i] = existing_index
+
+            if end.applied_moment is not None:
+                existing_index = None
+                for e in welds:
+                    index = self.elements.index(e)
+                    if end == e.start and index in start_moment_indices:
+                        existing_index = start_moment_indices[index]
+
+                    if end == e.end and index in end_moment_indices:
+                        existing_index = end_moment_indices[index]
+
+                if existing_index is None:
+                    Q = np.append(Q, end.applied_moment)
+                    end_moment_indices[i] = len(Q) - 1
+                else:
+                    end_moment_indices[i] = existing_index
+
+        for i, element in enumerate(self.elements):
             start = element.start
             end = element.end
 
@@ -197,8 +238,8 @@ class FrameSystem:
             if start.name in y_indices:
                 A[y_indices[start.name], 1] = 1
 
-            if start.name in moment_indices:
-                A[moment_indices[start.name], 2] = 1
+            if i in start_moment_indices:
+                A[start_moment_indices[i], 2] = 1
 
             if end.name in x_indices:
                 A[x_indices[end.name], 3] = 1
@@ -206,8 +247,8 @@ class FrameSystem:
             if end.name in y_indices:
                 A[y_indices[end.name], 4] = 1
 
-            if end.name in moment_indices:
-                A[moment_indices[end.name], 5] = 1
+            if i in end_moment_indices:
+                A[end_moment_indices[i], 5] = 1
 
             element.assembly_matrix = A
 
@@ -221,53 +262,29 @@ class FrameSystem:
             )
 
 
-L = 10
-A = 1e-5
-I = 5e-4
-E = 200e9
-
 system = FrameSystem()
 
-node_a = system.create_node("A", 0, L)
+node_a = system.create_node("A", 0, 0)
 
-node_b = system.create_node("B", 0, 0)
+node_b = system.create_node("B", 5, 0)
 node_b.add_x_dof(0)
-node_b.add_rotation_dof(140e3)
+node_b.add_y_dof(0)
+node_b.add_rotation_dof(0)
 
-node_c = system.create_node("C", L, 0)
+node_c = system.create_node("C", 7.5, 0)
+node_c.add_x_dof(0)
+node_c.add_y_dof(-150e3)
 node_c.add_rotation_dof(0)
 
-element_1 = system.create_element(node_a, node_b, A, I, E)
-element_2 = system.create_element(node_b, node_c, A, I, E)
+node_d = system.create_node("D", 5, -2)
+node_d.add_rotation_dof(0)
+
+left = system.create_element(node_a, node_b, 1, 640e-6, 200e9)
+right = system.create_element(node_b, node_c, 1, 640e-6, 200e9)
+system.weld_elements(left, right)
+
+support = system.create_element(node_b, node_d, 400e-6, 1, 70e9)
 
 system.solve()
 
-t = np.linspace(0, 1, 50)
-
-import matplotlib.pyplot as plt
-
-plt.plot(
-    element_1.undeflected_position(t)[:, 0],
-    element_1.undeflected_position(t)[:, 1],
-    "b.-",
-)
-
-plt.plot(
-    element_1.deflected_position(t, 50)[:, 0],
-    element_1.deflected_position(t, 50)[:, 1],
-    "r.-",
-)
-
-plt.plot(
-    element_2.undeflected_position(t)[:, 0],
-    element_2.undeflected_position(t)[:, 1],
-    "b.-",
-)
-
-plt.plot(
-    element_2.deflected_position(t, 50)[:, 0],
-    element_2.deflected_position(t, 50)[:, 1],
-    "r.-",
-)
-
-plt.show()
+print(support.get_local_forces())
