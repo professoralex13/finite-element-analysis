@@ -62,6 +62,8 @@ class FrameElement:
     def deflected_position(self, t: np.ndarray, scale) -> np.ndarray:
         d_e = self.get_local_deflections()
 
+        L = np.linalg.norm(self.end.position - self.start.position)
+
         N_1 = 1 - 3 * t**2 + 2 * t**3
         N_2 = t**3 * L - 2 * t**2 * L + t * L
         N_3 = 3 * t**2 - 2 * t**3
@@ -160,7 +162,13 @@ class FrameSystem:
         moment_of_inertia: float,
         elastic_modulus: float,
     ) -> FrameElement:
-        element = FrameElement(node_1, node_2, area, moment_of_inertia, elastic_modulus)
+        element = FrameElement(
+            node_1,
+            node_2,
+            area,
+            moment_of_inertia,
+            elastic_modulus,
+        )
 
         self.elements.append(element)
 
@@ -260,31 +268,3 @@ class FrameSystem:
             element.global_deflections = (
                 element.assembly_matrix.T @ self.dof_deflections
             )
-
-
-system = FrameSystem()
-
-node_a = system.create_node("A", 0, 0)
-
-node_b = system.create_node("B", 5, 0)
-node_b.add_x_dof(0)
-node_b.add_y_dof(0)
-node_b.add_rotation_dof(0)
-
-node_c = system.create_node("C", 7.5, 0)
-node_c.add_x_dof(0)
-node_c.add_y_dof(-150e3)
-node_c.add_rotation_dof(0)
-
-node_d = system.create_node("D", 5, -2)
-node_d.add_rotation_dof(0)
-
-left = system.create_element(node_a, node_b, 1, 640e-6, 200e9)
-right = system.create_element(node_b, node_c, 1, 640e-6, 200e9)
-system.weld_elements(left, right)
-
-support = system.create_element(node_b, node_d, 400e-6, 1, 70e9)
-
-system.solve()
-
-print(support.get_local_forces())
