@@ -3,9 +3,9 @@ import math
 
 
 class Node:
-    applied_x: float | None = None
-    applied_y: float | None = None
-    applied_moment: float | None = None
+    applied_x: float | None = 0
+    applied_y: float | None = 0
+    applied_moment: float | None = 0
 
     def __init__(
         self,
@@ -15,14 +15,38 @@ class Node:
         self.name = name
         self.position = position
 
-    def add_x_dof(self, force: float):
+    def force_x(self, force: float):
         self.applied_x = force
 
-    def add_y_dof(self, force: float):
+    def force_y(self, force: float):
         self.applied_y = force
 
-    def add_rotation_dof(self, moment: float):
-        self.applied_moment = moment
+    def force_moment(self, force: float):
+        self.applied_moment = force
+
+    def fix_x(self):
+        self.applied_x = None
+
+    def fix_y(self):
+        self.applied_y = None
+
+    def fix_rotation(self):
+        self.applied_moment = None
+
+    def fixed_joint(self):
+        self.fix_x()
+        self.fix_y()
+        self.fix_rotation()
+
+    def pin_joint(self):
+        self.fix_x()
+        self.fix_y()
+
+    def x_slider_joint(self):
+        self.fix_y()
+
+    def y_slider_joint(self):
+        self.fix_x()
 
 
 class FrameElement:

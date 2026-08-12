@@ -5,19 +5,15 @@ import matplotlib.pyplot as plt
 system = FrameSystem()
 
 node_a = system.create_node("A", 0, 0)
+node_a.fixed_joint()
 
 node_b = system.create_node("B", 5, 0)
-node_b.add_x_dof(0)
-node_b.add_y_dof(0)
-node_b.add_rotation_dof(0)
 
 node_c = system.create_node("C", 7.5, 0)
-node_c.add_x_dof(0)
-node_c.add_y_dof(-150e3)
-node_c.add_rotation_dof(0)
+node_c.force_y(-150e3)
 
 node_d = system.create_node("D", 5, -2)
-node_d.add_rotation_dof(0)
+node_d.pin_joint()
 
 left = system.create_element(node_a, node_b, 1, 640e-6, 200e9)
 right = system.create_element(node_b, node_c, 1, 640e-6, 200e9)
