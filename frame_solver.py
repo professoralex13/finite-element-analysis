@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from collections.abc import Callable
 
 
 class Node:
@@ -59,6 +60,9 @@ class FrameElement:
     assembly_matrix: np.ndarray | None = None
     global_deflections: np.ndarray | None = None
 
+    distributed_loads: list[Callable[[np.ndarray], np.ndarray]]
+    point_loads: list[tuple[float, float]]
+
     def __init__(
         self,
         start: Node,
@@ -72,11 +76,63 @@ class FrameElement:
         self.area = area
         self.second_moment_of_inertia = second_moment_of_inertia
         self.elastic_modulus = elastic_modulus
+        self.distributed_loads = []
+        self.point_loads = []
 
     def alpha(self):
         vector = self.end.position - self.start.position
 
         return math.atan2(vector[1], vector[0])
+
+    def add_distributed_load(self, load: Callable[[np.ndarray], np.ndarray]):
+        self.distributed_loads.append(load)
+
+    def add_point_load(self, load: float, point: float):
+        self.point_loads.append((load, point))
+
+    def get_local_equivalent_distributed_load(self):
+        if len(self.distributed_loads) == 0:
+            return np.zeros(6)
+
+        t = np.linspace(0, 1, 100)
+
+        load = sum(load(t) for load in self.distributed_loads)
+
+        integrand = self.get_shape_functions(t) * load
+
+        f_eq: np.ndarray = np.trapezoid(integrand, t, axis=1)  # type: ignore[assignment]
+
+        L = np.linalg.norm(self.end.position - self.start.position)
+
+        return L * np.array([0, f_eq[0], f_eq[1], 0, f_eq[2], f_eq[3]])
+
+    def get_local_equivalent_point_load(self):
+        if len(self.point_loads) == 0:
+            return np.zeros(6)
+
+        f_eq: np.ndarray = sum(
+            load * self.get_shape_functions(point) for load, point in self.point_loads
+        )  # type: ignore[assignment]
+
+        return np.array([0, f_eq[0], f_eq[1], 0, f_eq[2], f_eq[3]])
+
+    def get_nodal_equivalent_loading(self):
+        f_eq = (
+            self.get_local_equivalent_distributed_load()
+            + self.get_local_equivalent_point_load()
+        )
+
+        return self.assembly_matrix @ (self.get_transformation_matrix().T @ f_eq)
+
+    def get_shape_functions(self, t: np.ndarray | float):
+        L = np.linalg.norm(self.end.position - self.start.position)
+
+        N_1 = 1 - 3 * t**2 + 2 * t**3
+        N_2 = t**3 * L - 2 * t**2 * L + t * L
+        N_3 = 3 * t**2 - 2 * t**3
+        N_4 = t**3 * L - t**2 * L
+
+        return np.array([N_1, N_2, N_3, N_4])
 
     def undeflected_position(self, t: np.ndarray) -> np.ndarray:
         return self.start.position + t[:, None] * (
@@ -86,18 +142,11 @@ class FrameElement:
     def deflected_position(self, t: np.ndarray, scale) -> np.ndarray:
         d_e = self.get_local_deflections()
 
-        L = np.linalg.norm(self.end.position - self.start.position)
-
-        N_1 = 1 - 3 * t**2 + 2 * t**3
-        N_2 = t**3 * L - 2 * t**2 * L + t * L
-        N_3 = 3 * t**2 - 2 * t**3
-        N_4 = t**3 * L - t**2 * L
-
         axial_deflection = (1 - t) * d_e[0] + t * d_e[3]
 
-        transverse_deflection = (
-            N_1 * d_e[1] + N_2 * d_e[2] + N_3 * d_e[4] + N_4 * d_e[5]
-        )
+        N = self.get_shape_functions(t)
+
+        transverse_deflection = d_e[[1, 2, 4, 5]].dot(N)
 
         deflections_x = axial_deflection * math.cos(
             self.alpha()
@@ -283,6 +332,9 @@ class FrameSystem:
                 A[end_moment_indices[i], 5] = 1
 
             element.assembly_matrix = A
+
+        for element in self.elements:
+            Q += element.get_nodal_equivalent_loading()
 
         K_global = sum(element.get_global_stiffness() for element in self.elements)
 
