@@ -63,7 +63,23 @@ def print_matrix_rounded(matrix):
 
 
 def log_system_data(system: FrameSystem):
-    print("Assembly Matrices:")
+    print("DOF Ordering:")
+    for key, value in system.x_dof_indices.items():
+        print(f"q{value + 1} -> Node {key} X")
+
+    for key, value in system.y_dof_indices.items():
+        print(f"q{value + 1} -> Node {key} Y")
+
+    for key, value in system.start_moment_indices.items():
+        node = system.elements[key].start.name
+        print(f"q{value + 1} -> Node {node} Rot (Element {key} Start)")
+
+    for key, value in system.end_moment_indices.items():
+        node = system.elements[key].end.name
+        print(f"q{value + 1} -> Node {node} Rot (Element {key} End)")
+
+    print()
+    print("Assembly Matrices (Element Directions along X, Global DOFs along Y):")
     for i, element in enumerate(system.elements):
         print(f"Element {i + 1}:")
         print_matrix_rounded(element.assembly_matrix)

@@ -1,4 +1,6 @@
 """
+FEA Frame Solver: Alex Cutforth August 2026
+
 Logic for generically representing and solving Frame systems
 using Finite Element Analysis principles
 
@@ -306,6 +308,17 @@ class FrameSystem:
 
     dof_deflections: np.ndarray
 
+    x_dof_indices: dict[str, int]
+    y_dof_indices: dict[str, int]
+    start_moment_indices: dict[int, int]
+    end_moment_indices: dict[int, int]
+
+    def __init__(self):
+        self.x_dof_indices = {}
+        self.y_dof_indices = {}
+        self.start_moment_indices = {}
+        self.end_moment_indices = {}
+
     def create_node(self, name: str, x: float, y: float) -> Node:
         """Creates a new node at a given coordinate"""
         node = Node(name, np.array([x, y]))
@@ -351,24 +364,19 @@ class FrameSystem:
         nodal_forces = np.array([])
 
         # Lateral DOF indices are mapped by the Node Name
-        x_indices = {}
-        y_indices = {}
-
         # Rotational DOF indices are mapped by the element index
         # In a worst case, every element may have its own two moment DOFs
-        start_moment_indices = {}
-        end_moment_indices = {}
 
         # For each node, apply the nodal forces to the total Q array
         for node in self.nodes.values():
             # A value of None represents constrainted motion
             if node.applied_x is not None:
                 nodal_forces = np.append(nodal_forces, node.applied_x)
-                x_indices[node.name] = len(nodal_forces) - 1
+                self.x_dof_indices[node.name] = len(nodal_forces) - 1
 
             if node.applied_y is not None:
                 nodal_forces = np.append(nodal_forces, node.applied_y)
-                y_indices[node.name] = len(nodal_forces) - 1
+                self.y_dof_indices[node.name] = len(nodal_forces) - 1
 
         # Applying rotational forces is difficult, as duplicate degrees of freedom have to be
         # added as every joint between elements is assumed to be a pin,
@@ -392,18 +400,18 @@ class FrameSystem:
                 for e in welds:
                     index = self.elements.index(e)
 
-                    if start == e.start and index in start_moment_indices:
-                        existing_index = start_moment_indices[index]
+                    if start == e.start and index in self.start_moment_indices:
+                        existing_index = self.start_moment_indices[index]
 
-                    if start == e.end and index in end_moment_indices:
-                        existing_index = end_moment_indices[index]
+                    if start == e.end and index in self.end_moment_indices:
+                        existing_index = self.end_moment_indices[index]
 
                 # If no DOF yet exists, create one
                 if existing_index is None:
                     nodal_forces = np.append(nodal_forces, start.applied_moment)
-                    start_moment_indices[i] = len(nodal_forces) - 1
+                    self.start_moment_indices[i] = len(nodal_forces) - 1
                 else:
-                    start_moment_indices[i] = existing_index
+                    self.start_moment_indices[i] = existing_index
 
             if end.applied_moment is not None:
                 existing_index = None
@@ -412,18 +420,18 @@ class FrameSystem:
                 # linked to elements welded at the end
                 for e in welds:
                     index = self.elements.index(e)
-                    if end == e.start and index in start_moment_indices:
-                        existing_index = start_moment_indices[index]
+                    if end == e.start and index in self.start_moment_indices:
+                        existing_index = self.start_moment_indices[index]
 
-                    if end == e.end and index in end_moment_indices:
-                        existing_index = end_moment_indices[index]
+                    if end == e.end and index in self.end_moment_indices:
+                        existing_index = self.end_moment_indices[index]
 
                 # If no DOF yet exists, create one
                 if existing_index is None:
                     nodal_forces = np.append(nodal_forces, end.applied_moment)
-                    end_moment_indices[i] = len(nodal_forces) - 1
+                    self.end_moment_indices[i] = len(nodal_forces) - 1
                 else:
-                    end_moment_indices[i] = existing_index
+                    self.end_moment_indices[i] = existing_index
 
         for i, element in enumerate(self.elements):
             # The second pass through elements generates assembly matrices
@@ -433,23 +441,23 @@ class FrameSystem:
 
             assembly_matrix = np.zeros((len(nodal_forces), 6))
 
-            if start.name in x_indices:
-                assembly_matrix[x_indices[start.name], 0] = 1
+            if start.name in self.x_dof_indices:
+                assembly_matrix[self.x_dof_indices[start.name], 0] = 1
 
-            if start.name in y_indices:
-                assembly_matrix[y_indices[start.name], 1] = 1
+            if start.name in self.y_dof_indices:
+                assembly_matrix[self.y_dof_indices[start.name], 1] = 1
 
-            if i in start_moment_indices:
-                assembly_matrix[start_moment_indices[i], 2] = 1
+            if i in self.start_moment_indices:
+                assembly_matrix[self.start_moment_indices[i], 2] = 1
 
-            if end.name in x_indices:
-                assembly_matrix[x_indices[end.name], 3] = 1
+            if end.name in self.x_dof_indices:
+                assembly_matrix[self.x_dof_indices[end.name], 3] = 1
 
-            if end.name in y_indices:
-                assembly_matrix[y_indices[end.name], 4] = 1
+            if end.name in self.y_dof_indices:
+                assembly_matrix[self.y_dof_indices[end.name], 4] = 1
 
-            if i in end_moment_indices:
-                assembly_matrix[end_moment_indices[i], 5] = 1
+            if i in self.end_moment_indices:
+                assembly_matrix[self.end_moment_indices[i], 5] = 1
 
             element.assembly_matrix = assembly_matrix
 
