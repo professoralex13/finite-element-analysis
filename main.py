@@ -1,5 +1,5 @@
 from frame_solver import FrameSystem
-from visualization import plot_system
+from visualization import plot_system, log_system_data
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -32,6 +32,8 @@ top.add_distributed_load(lambda t: -10e3 * np.ones_like(t))
 top.add_point_load(-50e3, 0.5)
 
 system.solve()
+
+log_system_data(system)
 
 fig, axes = plt.subplots(1, 1)
 
