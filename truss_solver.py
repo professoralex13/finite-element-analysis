@@ -1,5 +1,9 @@
-import numpy as np
+"""
+FEA Truss solver: Alex Cutforth July 2026
+"""
+
 import math
+import numpy as np
 
 
 def solve_truss(node_positions, dofs, elements):
@@ -75,6 +79,7 @@ def solve_truss(node_positions, dofs, elements):
 E = 200e9
 A1 = 400e-6
 A2 = 600e-6
+
 L1 = 1.1
 L2 = 0.8
 
