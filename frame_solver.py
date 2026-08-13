@@ -104,7 +104,7 @@ class FrameElement:
 
         L = np.linalg.norm(self.end.position - self.start.position)
 
-        return L * np.array([0, f_eq[0], f_eq[1], 0, f_eq[2], f_eq[3]])
+        return L * f_eq
 
     def get_local_equivalent_point_load(self):
         if len(self.point_loads) == 0:
@@ -114,7 +114,7 @@ class FrameElement:
             load * self.get_shape_functions(point) for load, point in self.point_loads
         )  # type: ignore[assignment]
 
-        return np.array([0, f_eq[0], f_eq[1], 0, f_eq[2], f_eq[3]])
+        return f_eq
 
     def get_nodal_equivalent_loading(self):
         f_eq = (
@@ -127,12 +127,14 @@ class FrameElement:
     def get_shape_functions(self, t: np.ndarray | float):
         L = np.linalg.norm(self.end.position - self.start.position)
 
+        N_0 = t * 0
         N_1 = 1 - 3 * t**2 + 2 * t**3
         N_2 = t**3 * L - 2 * t**2 * L + t * L
-        N_3 = 3 * t**2 - 2 * t**3
-        N_4 = t**3 * L - t**2 * L
+        N_3 = t * 0
+        N_4 = 3 * t**2 - 2 * t**3
+        N_5 = t**3 * L - t**2 * L
 
-        return np.array([N_1, N_2, N_3, N_4])
+        return np.array([N_0, N_1, N_2, N_3, N_4, N_5])
 
     def undeflected_position(self, t: np.ndarray) -> np.ndarray:
         return self.start.position + t[:, None] * (
@@ -146,7 +148,7 @@ class FrameElement:
 
         N = self.get_shape_functions(t)
 
-        transverse_deflection = d_e[[1, 2, 4, 5]].dot(N)
+        transverse_deflection = d_e.dot(N)
 
         deflections_x = axial_deflection * math.cos(
             self.alpha()
