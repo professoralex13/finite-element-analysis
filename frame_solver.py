@@ -90,8 +90,11 @@ class FrameElement:
     assembly_matrix: np.ndarray | None = None
     global_deflections: np.ndarray | None = None
 
-    distributed_loads: list[Callable[[np.ndarray], np.ndarray]]
-    point_loads: list[tuple[float, float]]
+    distributed_shear_loads: list[Callable[[np.ndarray], np.ndarray]]
+    point_shear_loads: list[tuple[float, float]]
+
+    distributed_axial_loads: list[Callable[[np.ndarray], np.ndarray]]
+    point_axial_loads: list[tuple[float, float]]
 
     def __init__(
         self,
@@ -106,8 +109,11 @@ class FrameElement:
         self.area = area
         self.second_moment_of_inertia = second_moment_of_inertia
         self.elastic_modulus = elastic_modulus
-        self.distributed_loads = []
-        self.point_loads = []
+        self.distributed_shear_loads = []
+        self.point_shear_loads = []
+
+        self.distributed_axial_loads = []
+        self.point_axial_loads = []
 
     def alpha(self):
         """The angle in radians of the element from start to end, measured CCW from the X-axis"""
@@ -120,33 +126,49 @@ class FrameElement:
 
         return np.linalg.norm(self.end.position - self.start.position)
 
-    def add_distributed_load(self, load: Callable[[np.ndarray], np.ndarray]):
+    def add_distributed_shear_load(self, load: Callable[[np.ndarray], np.ndarray]):
         """
-        Adds a distributed load across the element.
+        Adds a distributed shear load across the element.
         Load function takes in parameter t (0 -> 1) and returns the force per length at each point
         """
-        self.distributed_loads.append(load)
+        self.distributed_shear_loads.append(load)
 
-    def add_point_load(self, load: float, point: float):
-        """Adds a point load at some point across the element (position measured between 0 and 1)"""
-        self.point_loads.append((load, point))
+    def add_point_shear_load(self, load: float, point: float):
+        """Adds a point shear load at some point across the element (position measured between 0 and 1)"""
+        self.point_shear_loads.append((load, point))
+
+    def add_distributed_axial_load(self, load: Callable[[np.ndarray], np.ndarray]):
+        """
+        Adds a distributed axial load across the element.
+        Load function takes in parameter t (0 -> 1) and returns the force per length at each point
+        """
+        self.distributed_axial_loads.append(load)
+
+    def add_point_axial_load(self, load: float, point: float):
+        """Adds a point axial load at some point across the element (position measured between 0 and 1)"""
+        self.point_axial_loads.append((load, point))
 
     def get_local_equivalent_distributed_load(self):
         """
         Returns the local equivalent forces due to any added distributed loads
         """
-        if len(self.distributed_loads) == 0:
+        if (
+            len(self.distributed_shear_loads) == 0
+            and len(self.distributed_axial_loads) == 0
+        ):
             return np.zeros(6)
 
         t = np.linspace(0, 1, 100)
 
         # Sum all distributed loads for each t
-        load = sum(load(t) for load in self.distributed_loads)
+        shear_load = sum(load(t) for load in self.distributed_shear_loads)
+        axial_load = sum(load(t) for load in self.distributed_axial_loads)
 
-        integrand = self.get_shape_functions(t) * load
+        shear_integrand = self.get_lateral_shape_functions(t) * shear_load
+        axial_integrand = self.get_axial_shape_functions(t) * axial_load
 
         # Integrate the distributed load for each shape function
-        f_eq: np.ndarray = np.trapezoid(integrand, t, axis=1)  # type: ignore[assignment]
+        f_eq: np.ndarray = np.trapezoid(shear_integrand + axial_integrand, t, axis=1)  # type: ignore[assignment]
 
         # Unnormalize based on element length
         return self.length() * f_eq
@@ -155,14 +177,20 @@ class FrameElement:
         """
         Returns the local equivalent forces due to any added point loads
         """
-        if len(self.point_loads) == 0:
+        if len(self.point_shear_loads) == 0 and len(self.point_axial_loads) == 0:
             return np.zeros(6)
 
-        f_eq: np.ndarray = sum(
-            load * self.get_shape_functions(point) for load, point in self.point_loads
-        )  # type: ignore[assignment]
+        f_shear = sum(
+            load * self.get_lateral_shape_functions(point)
+            for load, point in self.point_shear_loads
+        )
 
-        return f_eq
+        f_axial = sum(
+            load * self.get_axial_shape_functions(point)
+            for load, point in self.point_axial_loads
+        )
+
+        return f_shear + f_axial
 
     def get_nodal_equivalent_loading(self):
         """
@@ -175,9 +203,9 @@ class FrameElement:
 
         return self.assembly_matrix @ (self.get_transformation_matrix().T @ f_eq)
 
-    def get_shape_functions(self, t: np.ndarray | float):
+    def get_lateral_shape_functions(self, t: np.ndarray | float):
         """
-        Returns the value of the shape functions for a given t (array or float)
+        Returns the value of the lateral shape functions for a given t (array or float)
 
         Resulting array has 6 values, with indices 0 and 3 being all zero
         """
@@ -186,14 +214,25 @@ class FrameElement:
         # Shape functions are only relevant for the Beam components of the Frame
         # To simplify downstream logic, n0 and n3 are set to zero to represent the isolation between axial force and lateral deflection
 
-        n0 = t * 0
+        z = np.zeros_like(t)
+
         n1 = 1 - 3 * t**2 + 2 * t**3
         n2 = t**3 * l - 2 * t**2 * l + t * l
-        n3 = t * 0
-        n4 = 3 * t**2 - 2 * t**3
-        n5 = t**3 * l - t**2 * l
+        n3 = 3 * t**2 - 2 * t**3
+        n4 = t**3 * l - t**2 * l
 
-        return np.array([n0, n1, n2, n3, n4, n5])
+        return np.array([z, n1, n2, z, n3, n4])
+
+    def get_axial_shape_functions(self, t: np.ndarray | float):
+        """
+        Returns the value of the axial shape functions for a given t (array or float)
+
+        Resulting array has 6 values, with indices 1, 2, 4, and 5 being all zero
+        """
+
+        z = np.zeros_like(t)
+
+        return np.array([1 - t, z, z, t, z, z])
 
     def undeflected_position(self, t: np.ndarray) -> np.ndarray:
         """
@@ -207,9 +246,8 @@ class FrameElement:
         """Returns the deflected coordinate for a given t (0 -> 1)"""
         d_e = self.get_local_deflections()
 
-        axial_deflection = (1 - t) * d_e[0] + t * d_e[3]
-
-        transverse_deflection = d_e.dot(self.get_shape_functions(t))
+        axial_deflection = d_e.dot(self.get_axial_shape_functions(t))
+        transverse_deflection = d_e.dot(self.get_lateral_shape_functions(t))
 
         deflections_x = axial_deflection * math.cos(
             self.alpha()

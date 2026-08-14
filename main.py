@@ -28,8 +28,8 @@ right = system.create_element(node_c, node_d, A, I, E)
 system.weld_elements(left, top)
 system.weld_elements(top, right)
 
-top.add_distributed_load(lambda t: -10e3 * np.ones_like(t))
-top.add_point_load(-50e3, 0.5)
+top.add_distributed_shear_load(lambda t: -10e3 * np.ones_like(t))
+top.add_point_shear_load(-50e3, 0.5)
 
 system.solve()
 
