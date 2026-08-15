@@ -26,6 +26,8 @@ class Node:
     applied_y: float | None = 0
     applied_moment: float | None = 0
 
+    reaction_load: np.ndarray
+
     def __init__(
         self,
         name: str,
@@ -33,6 +35,7 @@ class Node:
     ):
         self.name = name
         self.position = position
+        self.reaction_load = np.zeros(3)
 
     def force_x(self, force: float):
         """Add an applied force in the X axis"""
@@ -192,16 +195,17 @@ class FrameElement:
 
         return f_shear + f_axial
 
-    def get_nodal_equivalent_loading(self):
+    def get_global_equivalent_loading(self):
         """
-        Returns the global nodal forces due to any extra forces such as distributed or point loads
+        Returns the global forces due to any extra element based such as distributed or point loads
         """
+
         f_eq: np.ndarray = (
             self.get_local_equivalent_distributed_load()
             + self.get_local_equivalent_point_load()
         )
 
-        return self.assembly_matrix @ (self.get_transformation_matrix().T @ f_eq)
+        return self.get_transformation_matrix().T @ f_eq
 
     def get_lateral_shape_functions(self, t: np.ndarray | float):
         """
@@ -344,6 +348,7 @@ class FrameSystem:
     elements: list[FrameElement] = []
     weld_pairs: list[tuple[FrameElement, FrameElement]] = []
 
+    nodal_forces: np.ndarray
     dof_deflections: np.ndarray
 
     x_dof_indices: dict[str, int]
@@ -399,7 +404,7 @@ class FrameSystem:
 
         # To simplify logic, nodal force ordering has all lateral DOFs first,
         # with rotational forces at the end
-        nodal_forces = np.array([])
+        self.nodal_forces = np.array([])
 
         # Lateral DOF indices are mapped by the Node Name
         # Rotational DOF indices are mapped by the element index
@@ -409,12 +414,12 @@ class FrameSystem:
         for node in self.nodes.values():
             # A value of None represents constrainted motion
             if node.applied_x is not None:
-                nodal_forces = np.append(nodal_forces, node.applied_x)
-                self.x_dof_indices[node.name] = len(nodal_forces) - 1
+                self.nodal_forces = np.append(self.nodal_forces, node.applied_x)
+                self.x_dof_indices[node.name] = len(self.nodal_forces) - 1
 
             if node.applied_y is not None:
-                nodal_forces = np.append(nodal_forces, node.applied_y)
-                self.y_dof_indices[node.name] = len(nodal_forces) - 1
+                self.nodal_forces = np.append(self.nodal_forces, node.applied_y)
+                self.y_dof_indices[node.name] = len(self.nodal_forces) - 1
 
         # Applying rotational forces is difficult, as duplicate degrees of freedom have to be
         # added as every joint between elements is assumed to be a pin,
@@ -446,8 +451,10 @@ class FrameSystem:
 
                 # If no DOF yet exists, create one
                 if existing_index is None:
-                    nodal_forces = np.append(nodal_forces, start.applied_moment)
-                    self.start_moment_indices[i] = len(nodal_forces) - 1
+                    self.nodal_forces = np.append(
+                        self.nodal_forces, start.applied_moment
+                    )
+                    self.start_moment_indices[i] = len(self.nodal_forces) - 1
                 else:
                     self.start_moment_indices[i] = existing_index
 
@@ -466,8 +473,8 @@ class FrameSystem:
 
                 # If no DOF yet exists, create one
                 if existing_index is None:
-                    nodal_forces = np.append(nodal_forces, end.applied_moment)
-                    self.end_moment_indices[i] = len(nodal_forces) - 1
+                    self.nodal_forces = np.append(self.nodal_forces, end.applied_moment)
+                    self.end_moment_indices[i] = len(self.nodal_forces) - 1
                 else:
                     self.end_moment_indices[i] = existing_index
 
@@ -477,7 +484,7 @@ class FrameSystem:
             start = element.start
             end = element.end
 
-            assembly_matrix = np.zeros((len(nodal_forces), 6))
+            assembly_matrix = np.zeros((len(self.nodal_forces), 6))
 
             if start.name in self.x_dof_indices:
                 assembly_matrix[self.x_dof_indices[start.name], 0] = 1
@@ -501,11 +508,28 @@ class FrameSystem:
 
             # After the assembly matrix has been generated, calculate the equivalent nodal
             # loading due to point and distributed loads, and append to the total nodal forces
-            nodal_forces += element.get_nodal_equivalent_loading()
+            self.nodal_forces += (
+                element.assembly_matrix @ element.get_global_equivalent_loading()
+            )
 
-        self.dof_deflections = np.linalg.solve(self.get_total_stiffness(), nodal_forces)
+        self.dof_deflections = np.linalg.solve(
+            self.get_total_stiffness(), self.nodal_forces
+        )
 
         for element in self.elements:
             element.global_deflections = (
                 element.assembly_matrix.T @ self.dof_deflections
             )
+
+        for node in self.nodes.values():
+            for element in self.elements:
+                if element.start == node:
+                    node.reaction_load += (
+                        element.get_global_forces()[:3]
+                        - element.get_global_equivalent_loading()[:3]
+                    )
+                if element.end == node:
+                    node.reaction_load += (
+                        element.get_global_forces()[3:]
+                        - element.get_global_equivalent_loading()[3:]
+                    )
