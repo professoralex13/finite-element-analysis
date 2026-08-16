@@ -99,10 +99,10 @@ class FrameElement:
     assembly_matrix: np.ndarray | None = None
     global_deflections: np.ndarray | None = None
 
-    distributed_shear_loads: list[Callable[[np.ndarray], np.ndarray]]
+    distributed_shear_loads: list[Callable[[np.ndarray], np.ndarray | float]]
     point_shear_loads: list[tuple[float, float]]
 
-    distributed_axial_loads: list[Callable[[np.ndarray], np.ndarray]]
+    distributed_axial_loads: list[Callable[[np.ndarray], np.ndarray | float]]
     point_axial_loads: list[tuple[float, float]]
 
     def __init__(
@@ -135,7 +135,9 @@ class FrameElement:
 
         return np.linalg.norm(self.end.position - self.start.position)
 
-    def add_distributed_shear_load(self, load: Callable[[np.ndarray], np.ndarray]):
+    def add_distributed_shear_load(
+        self, load: Callable[[np.ndarray], np.ndarray | float]
+    ):
         """
         Adds a distributed shear load across the element.
         Load function takes in parameter t (0 -> 1) and returns the force per length at each point
@@ -146,12 +148,38 @@ class FrameElement:
         """Adds a point shear load at some point across the element (position measured between 0 and 1)"""
         self.point_shear_loads.append((load, point))
 
-    def add_distributed_axial_load(self, load: Callable[[np.ndarray], np.ndarray]):
+    def add_distributed_axial_load(
+        self, load: Callable[[np.ndarray], np.ndarray | float]
+    ):
         """
         Adds a distributed axial load across the element.
         Load function takes in parameter t (0 -> 1) and returns the force per length at each point
         """
         self.distributed_axial_loads.append(load)
+
+    def add_distributed_angled_load(
+        self, load: Callable[[np.ndarray], np.ndarray | float], angle: float
+    ):
+        """
+        Adds both shear and axial distributed loads given an angled load
+
+        The load is measured CCW from the X axis (in element coordinates)
+        """
+        self.add_distributed_shear_load(lambda t: load(t) * np.sin(angle))
+
+        self.add_distributed_axial_load(lambda t: load(t) * np.cos(angle))
+
+    def add_distributed_y_load(self, load: Callable[[np.ndarray], np.ndarray | float]):
+        """
+        Adds both shear and axial distributed loads given a Global Y axis aligned distributed load
+        """
+        self.add_distributed_angled_load(load, np.pi / 2 - self.alpha())
+
+    def add_distributed_x_load(self, load: Callable[[np.ndarray], np.ndarray | float]):
+        """
+        Adds both shear and axial distributed loads given a Global X axis aligned distributed load
+        """
+        self.add_distributed_angled_load(load, -self.alpha())
 
     def add_point_axial_load(self, load: float, point: float):
         """Adds a point axial load at some point across the element (position measured between 0 and 1)"""
