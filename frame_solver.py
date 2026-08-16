@@ -380,7 +380,7 @@ class FrameSystem:
 
     def create_node(self, name: str, x: float, y: float) -> Node:
         """Creates a new node at a given coordinate"""
-        node = Node(name, np.array([x, y]))
+        node = Node(name, np.array([x, y], dtype="float64"))
 
         self.nodes[name] = node
 
