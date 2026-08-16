@@ -11,6 +11,7 @@ ZERO_THRESHOLD = 1e-10
 
 
 def format_number(x, decimals, max_len=None):
+    """Formats a number with a given number of decimals and padding"""
     if abs(x) > ZERO_THRESHOLD:
         return (
             f"{x:>{max_len}.{decimals}f}"

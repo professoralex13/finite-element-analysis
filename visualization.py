@@ -1,9 +1,15 @@
-from matplotlib.patches import Arc, RegularPolygon
+"""
+FEA Visualisation Helpers
 
-from frame_solver import FrameElement, FrameSystem
+Author: Alex Cutforth
+August 2026
+"""
+
+from matplotlib.patches import Arc, RegularPolygon
 from matplotlib.axes import Axes
 import numpy as np
 
+from frame_solver import FrameElement, FrameSystem
 from print_matrix import print_matrix, print_matrix_rounded
 
 POINTS_PER_ELEMENT = 50
@@ -12,6 +18,7 @@ POINTS_PER_ELEMENT = 50
 def plot_element(
     axes: Axes, element: FrameElement, deflection_scaling=20, show_deflections=True
 ):
+    """Plots a frame element on an Axes with optional deflection rendering (scaleable)"""
     t = np.linspace(0, 1, POINTS_PER_ELEMENT)
 
     undeflected = element.undeflected_position(t)
@@ -27,6 +34,10 @@ def plot_element(
 def plot_system_deflection(
     axes: Axes, system: FrameSystem, title: str | None = None, deflection_scaling=20
 ):
+    """
+    Plots a full Frame system with deflections
+    """
+
     axes.set_title(title or f"System with deflection scaling of {deflection_scaling}x")
     axes.set_aspect("equal")
     for element in system.elements:
@@ -39,6 +50,10 @@ def plot_element_fbd(
     element: FrameElement,
     arrow_scale: float = 0.25,
 ):
+    """
+    Plots the freebody diagram for a given frame element
+    """
+
     index = system.elements.index(element)
 
     axes.set_title(f"Element {index + 1} FBD")
@@ -59,6 +74,8 @@ def plot_element_fbd(
 
     axes_pos = midpoint + y_e * arrow_scale * 0.5
 
+    # Draw Element Axis Arrows and Labels
+
     axes.arrow(
         axes_pos[0],
         axes_pos[1],
@@ -71,10 +88,16 @@ def plot_element_fbd(
         ec="black",
     )
 
-    text_angle = (
-        element.alpha()
-        if -np.pi / 2 < element.alpha() < np.pi / 2
-        else element.alpha() + np.pi
+    axes.arrow(
+        axes_pos[0],
+        axes_pos[1],
+        (x_e * arrow_scale)[0],
+        (x_e * arrow_scale)[1],
+        width=arrow_scale * 0.05,
+        head_width=arrow_scale * 0.2,
+        head_length=arrow_scale * 0.3,
+        fc="black",
+        ec="black",
     )
 
     axes.text(
@@ -93,23 +116,19 @@ def plot_element_fbd(
         color="black",
     )
 
-    axes.arrow(
-        axes_pos[0],
-        axes_pos[1],
-        (x_e * arrow_scale)[0],
-        (x_e * arrow_scale)[1],
-        width=arrow_scale * 0.05,
-        head_width=arrow_scale * 0.2,
-        head_length=arrow_scale * 0.3,
-        fc="black",
-        ec="black",
-    )
+    # Draw Element label and transformation angle
 
     box_properties = dict(
         boxstyle="square,pad=0.25",
         facecolor="none",
         edgecolor="black",
         linewidth=1,
+    )
+
+    text_angle = (
+        element.alpha()
+        if -np.pi / 2 < element.alpha() < np.pi / 2
+        else element.alpha() + np.pi
     )
 
     axes.text(
@@ -139,22 +158,22 @@ def plot_element_fbd(
         rotation_mode="anchor",
     )
 
-    draw_dof_arrow(
-        axes, element.start.position, np.array([1.0, 0.0]), arrow_scale, "D1"
-    )
-    draw_dof_arrow(
-        axes, element.start.position, np.array([0.0, 1.0]), arrow_scale, "D2"
-    )
+    # Draw 6 DOF arrows and label
+
+    draw_dof_arrow(axes, element.start.position, np.array([1, 0]), arrow_scale, "D1")
+    draw_dof_arrow(axes, element.start.position, np.array([0, 1]), arrow_scale, "D2")
     draw_rot_dof_arrow(axes, element.start.position, arrow_scale, arrow_scale, "D3")
 
-    draw_dof_arrow(axes, element.end.position, np.array([1.0, 0.0]), arrow_scale, "D4")
-    draw_dof_arrow(axes, element.end.position, np.array([0.0, 1.0]), arrow_scale, "D5")
+    draw_dof_arrow(axes, element.end.position, np.array([1, 0]), arrow_scale, "D4")
+    draw_dof_arrow(axes, element.end.position, np.array([0, 1]), arrow_scale, "D5")
     draw_rot_dof_arrow(axes, element.end.position, arrow_scale, arrow_scale, "D6")
 
 
 def plot_system_dofs(
     axes: Axes, system: FrameSystem, title: str | None = None, arrow_scale: float = 0.25
 ):
+    """Plots the full frame system and any degrees of freedom for the system"""
+
     axes.set_title(title or "System DOFS")
     axes.set_aspect("equal")
 
@@ -261,6 +280,8 @@ def plot_system_dofs(
 
 
 def draw_dof_arrow(axes: Axes, pos, direction: np.ndarray, scale, label: str):
+    """Draws a straight arrow with a label"""
+
     axes.arrow(
         pos[0],
         pos[1],
@@ -283,6 +304,8 @@ def draw_dof_arrow(axes: Axes, pos, direction: np.ndarray, scale, label: str):
 
 
 def draw_rot_dof_arrow(axes: Axes, center, radius, scale, label: str):
+    """Draws a rotational arrow and label"""
+
     draw_circle_arrow(
         axes,
         radius,
@@ -301,17 +324,29 @@ def draw_rot_dof_arrow(axes: Axes, center, radius, scale, label: str):
 
 
 def draw_circle_arrow(
-    ax, radius, head_radius, centX, centY, angle_=90, theta2_=180, color_="red"
+    ax,
+    radius,
+    head_radius,
+    center_x,
+    center_y,
+    start_angle=90,
+    angular_size=180,
+    color_="red",
 ):
-    """https://stackoverflow.com/questions/37512502/how-to-make-arrow-that-loops-in-matplotlib"""
+    """
+    Draws a circle with arrow
+
+    https://stackoverflow.com/questions/37512502/how-to-make-arrow-that-loops-in-matplotlib
+    """
+
     # ========Line
     arc = Arc(
-        (centX, centY),
+        (center_x, center_y),
         radius * 2,
         radius * 2,
-        angle=angle_,
+        angle=start_angle,
         theta1=0,
-        theta2=theta2_,
+        theta2=angular_size,
         capstyle="round",
         linestyle="-",
         lw=3,
@@ -320,23 +355,25 @@ def draw_circle_arrow(
     ax.add_patch(arc)
 
     # ========Create the arrow head
-    endX = centX + (radius) * np.cos(
-        np.radians(theta2_ + angle_)
+    end_x = center_x + (radius) * np.cos(
+        np.radians(angular_size + start_angle)
     )  # Do trig to determine end position
-    endY = centY + (radius) * np.sin(np.radians(theta2_ + angle_))
+    end_y = center_y + (radius) * np.sin(np.radians(angular_size + start_angle))
 
     ax.add_patch(  # Create triangle as arrow head
         RegularPolygon(
-            (endX, endY),  # (x,y)
+            (end_x, end_y),  # (x,y)
             3,  # number of vertices
             radius=head_radius,  # radius
-            orientation=np.radians(angle_ + theta2_),  # orientation
+            orientation=np.radians(start_angle + angular_size),  # orientation
             color=color_,
         )
     )
 
 
 def log_system_data(system: FrameSystem):
+    """Prints an extensive summary for a solved frame system"""
+
     print("DOF Ordering:")
     for key, value in system.x_dof_indices.items():
         print(f"q{value + 1} -> Node {key} X")
