@@ -161,7 +161,7 @@ class FrameElement:
         ):
             return np.zeros(6)
 
-        t = np.linspace(0, 1, 100)
+        t = np.linspace(0, 1, 500)
 
         # Sum all distributed loads for each t
         shear_load = sum(load(t) for load in self.distributed_shear_loads)
@@ -339,6 +339,17 @@ class FrameElement:
         """
 
         return self.get_transformation_matrix().T @ self.get_local_forces()
+
+    def get_axial_force(self):
+        return self.get_local_forces()[3]
+
+    def get_axial_stress(self):
+        return self.get_axial_force() / self.area
+
+    def get_axial_strain(self):
+        delta_l = self.get_local_deflections()[3] - self.get_local_deflections()[0]
+
+        return delta_l / self.length()
 
 
 class FrameSystem:

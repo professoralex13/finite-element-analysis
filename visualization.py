@@ -72,11 +72,11 @@ def log_system_data(system: FrameSystem):
 
     for key, value in system.start_moment_indices.items():
         node = system.elements[key].start.name
-        print(f"q{value + 1} -> Node {node} Rot (Element {key} Start)")
+        print(f"q{value + 1} -> Node {node} Rot (Element {key + 1} Start)")
 
     for key, value in system.end_moment_indices.items():
         node = system.elements[key].end.name
-        print(f"q{value + 1} -> Node {node} Rot (Element {key} End)")
+        print(f"q{value + 1} -> Node {node} Rot (Element {key + 1} End)")
 
     print()
     print("Assembly Matrices (Element Directions along X, Global DOFs along Y):")
@@ -95,12 +95,43 @@ def log_system_data(system: FrameSystem):
     print_matrix(system.get_total_stiffness())
     print()
 
+    print("DOF Forces:")
+    print_matrix(system.nodal_forces, scale_coef=1e3)
+    print()
+
     print("Global Deflections:")
     print_matrix(system.dof_deflections, scale_coef=1e-3)
     print()
 
-    print("Global Forces:")
+    print("Nodal Deflections (Local Axes):")
     for i, element in enumerate(system.elements):
         print(f"Element {i + 1}:")
-        print_matrix(element.get_global_forces(), scale_coef=1e3)
+        print(f"Start (Node {element.start.name}):")
+        print_matrix(element.get_local_deflections()[:3], scale_coef=1e-3)
+        print(f"End (Node {element.end.name}):")
+        print_matrix(element.get_local_deflections()[3:], scale_coef=1e-3)
+    print()
+
+    print("Nodal Reactions (Global Axes):")
+    for name, node in system.nodes.items():
+        print(f"(Node {name}):")
+        print_matrix(node.reaction_load, scale_coef=1e3)
+    print()
+
+    print("Element Forces (Global Axes):")
+    for i, element in enumerate(system.elements):
+        print(f"Element {i + 1}:")
+        print(f"Start (Node {element.start.name}):")
+        print_matrix(element.get_global_forces()[:3], scale_coef=1e3)
+        print(f"End (Node {element.end.name}):")
+        print_matrix(element.get_global_forces()[3:], scale_coef=1e3)
+    print()
+
+    print("Element Forces (Local Axes):")
+    for i, element in enumerate(system.elements):
+        print(f"Element {i + 1}:")
+        print(f"Start (Node {element.start.name}):")
+        print_matrix(element.get_local_forces()[:3], scale_coef=1e3)
+        print(f"End (Node {element.end.name}):")
+        print_matrix(element.get_local_forces()[3:], scale_coef=1e3)
     print()
