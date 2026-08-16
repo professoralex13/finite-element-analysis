@@ -12,7 +12,7 @@ def plot_element(axes: Axes, element: FrameElement, deflection_scaling=20):
 
     axes.plot(undeflected[:, 0], undeflected[:, 1], "b-")
 
-    deflected = element.deflected_position(t, deflection_scaling)
+    deflected = undeflected + element.deflection_vector(t) * deflection_scaling
 
     axes.plot(deflected[:, 0], deflected[:, 1], "r--")
 

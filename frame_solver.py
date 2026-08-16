@@ -246,8 +246,8 @@ class FrameElement:
             self.end.position - self.start.position
         )
 
-    def deflected_position(self, t: np.ndarray, scale) -> np.ndarray:
-        """Returns the deflected coordinate for a given t (0 -> 1)"""
+    def deflection_vector(self, t: np.ndarray | float) -> np.ndarray:
+        """Returns the deflection offset for a given t (0 -> 1)"""
         d_e = self.get_local_deflections()
 
         axial_deflection = d_e.dot(self.get_axial_shape_functions(t))
@@ -263,7 +263,7 @@ class FrameElement:
 
         deflections = np.column_stack((deflections_x, deflections_y))
 
-        return self.undeflected_position(t) + deflections * scale
+        return deflections
 
     def get_local_stiffness(self):
         """
