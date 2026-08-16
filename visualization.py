@@ -17,8 +17,10 @@ def plot_element(axes: Axes, element: FrameElement, deflection_scaling=20):
     axes.plot(deflected[:, 0], deflected[:, 1], "r--")
 
 
-def plot_system(axes: Axes, system: FrameSystem, deflection_scaling=20):
-    axes.set_title(f"System with deflection scaling of {deflection_scaling}x")
+def plot_system(
+    axes: Axes, system: FrameSystem, title: str | None = None, deflection_scaling=20
+):
+    axes.set_title(title or f"System with deflection scaling of {deflection_scaling}x")
     axes.set_aspect("equal")
     for element in system.elements:
         plot_element(axes, element, deflection_scaling=deflection_scaling)
@@ -47,14 +49,21 @@ def print_matrix(matrix, decimals=4, scale_coef=None):
     # Scale matrix values
     printed_matrix = matrix / scale_coef
 
-    print(f"Scaling coefficient: {scale_coef:.0e}")
     max_len = max(len(format_number(x, decimals)) for x in printed_matrix.flatten())
 
-    for row in printed_matrix:
+    for i, row in enumerate(printed_matrix):
+        print("|", end="")
         if isinstance(row, np.float64):
-            print(f"|{format_number(row, decimals, max_len=max_len)}|")
+            print(format_number(row, decimals, max_len=max_len), end="")
         else:
-            print(" ".join(format_number(x, decimals, max_len=max_len) for x in row))
+            print(
+                " ".join(format_number(x, decimals, max_len=max_len) for x in row),
+                end="",
+            )
+        if i == len(printed_matrix) // 2:
+            print(f"| x {scale_coef:.0e}")
+        else:
+            print("|")
 
 
 def print_matrix_rounded(matrix):
