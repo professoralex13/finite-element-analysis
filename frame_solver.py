@@ -26,6 +26,8 @@ class Node:
     applied_y: float | None = 0
     applied_moment: float | None = 0
 
+    extra_rotation_dofs: list[tuple[float, list[FrameElement]]]
+
     reaction_load: np.ndarray
 
     def __init__(
@@ -36,6 +38,7 @@ class Node:
         self.name = name
         self.position = position
         self.reaction_load = np.zeros(3)
+        self.extra_rotation_dofs = []
 
     def force_x(self, force: float):
         """Add an applied force in the X axis"""
@@ -48,6 +51,9 @@ class Node:
     def force_moment(self, force: float):
         """Add an applied moment"""
         self.applied_moment = force
+
+    def add_extra_rotation_dof(self, force: float, elements: list[FrameElement]):
+        self.extra_rotation_dofs.append((force, elements))
 
     def fix_x(self):
         """Remove freedom of motion from the X axis"""
@@ -357,7 +363,6 @@ class FrameSystem:
 
     nodes: dict[str, Node] = {}
     elements: list[FrameElement] = []
-    weld_pairs: list[tuple[FrameElement, FrameElement]] = []
 
     nodal_forces: np.ndarray
     dof_deflections: np.ndarray
@@ -402,10 +407,6 @@ class FrameSystem:
 
         return element
 
-    def weld_elements(self, element_1: FrameElement, element_2: FrameElement):
-        """Fixes two elements together rotationaly to prevent generation of extra rotational DOFs"""
-        self.weld_pairs.append((element_1, element_2))
-
     def get_total_stiffness(self):
         """Returns the total global stiffness matrix for the system"""
         return sum(element.get_global_stiffness() for element in self.elements)
@@ -432,62 +433,35 @@ class FrameSystem:
                 self.nodal_forces = np.append(self.nodal_forces, node.applied_y)
                 self.y_dof_indices[node.name] = len(self.nodal_forces) - 1
 
-        # Applying rotational forces is difficult, as duplicate degrees of freedom have to be
-        # added as every joint between elements is assumed to be a pin,
-        # unless they are marked as welded
-        for i, element in enumerate(self.elements):
-            # The first pass through elements generates rotational DOFs
+            if node.applied_moment is not None:
+                # Add extra rotation DOFs to Q array immediately after main DOF
+                self.nodal_forces = np.append(self.nodal_forces, node.applied_moment)
+                for force, _ in node.extra_rotation_dofs:
+                    self.nodal_forces = np.append(self.nodal_forces, force)
 
-            start = element.start
-            end = element.end
-
-            # Find all elements welded to this element
-            welds = [
-                x for e in self.weld_pairs for x in e if element in e and element != x
-            ]
-
-            if start.applied_moment is not None:
-                existing_index = None
-
-                # If the node at the start is not fixed, search for any existing degrees of freedom
-                # linked to elements welded at the start
-                for e in welds:
-                    index = self.elements.index(e)
-
-                    if start == e.start and index in self.start_moment_indices:
-                        existing_index = self.start_moment_indices[index]
-
-                    if start == e.end and index in self.end_moment_indices:
-                        existing_index = self.end_moment_indices[index]
-
-                # If no DOF yet exists, create one
-                if existing_index is None:
-                    self.nodal_forces = np.append(
-                        self.nodal_forces, start.applied_moment
+                # Loop through elements and find the extra DOF offset if any
+                for i, element in enumerate(self.elements):
+                    offset = next(
+                        (
+                            i
+                            for i, (_, els) in enumerate(node.extra_rotation_dofs)
+                            if element in els
+                        ),
+                        -1,
                     )
-                    self.start_moment_indices[i] = len(self.nodal_forces) - 1
-                else:
-                    self.start_moment_indices[i] = existing_index
 
-            if end.applied_moment is not None:
-                existing_index = None
+                    moment_index = (
+                        len(self.nodal_forces) - len(node.extra_rotation_dofs) + offset
+                    )
 
-                # If the node at the end is not fixed, search for any existing degrees of freedom
-                # linked to elements welded at the end
-                for e in welds:
-                    index = self.elements.index(e)
-                    if end == e.start and index in self.start_moment_indices:
-                        existing_index = self.start_moment_indices[index]
-
-                    if end == e.end and index in self.end_moment_indices:
-                        existing_index = self.end_moment_indices[index]
-
-                # If no DOF yet exists, create one
-                if existing_index is None:
-                    self.nodal_forces = np.append(self.nodal_forces, end.applied_moment)
-                    self.end_moment_indices[i] = len(self.nodal_forces) - 1
-                else:
-                    self.end_moment_indices[i] = existing_index
+                    if element.start == node:
+                        self.start_moment_indices[i] = moment_index
+                    elif element.end == node:
+                        self.end_moment_indices[i] = moment_index
+                    elif offset != -1:
+                        raise ValueError(
+                            f"Element {i + 1} is an extra DOF for node {node.name} but is not attached to it any any end"
+                        )
 
         for i, element in enumerate(self.elements):
             # The second pass through elements generates assembly matrices
