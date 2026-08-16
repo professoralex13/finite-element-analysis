@@ -1,5 +1,5 @@
 from frame_solver import FrameSystem
-from visualization import plot_system, log_system_data
+from visualization import plot_system_deflection, log_system_data
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -37,7 +37,7 @@ log_system_data(system)
 
 fig, axes = plt.subplots(1, 1)
 
-plot_system(axes, system)
+plot_system_deflection(axes, system)
 
 fig.legend()
 
