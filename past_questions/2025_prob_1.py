@@ -1,7 +1,7 @@
-from frame_solver import FrameSystem
-from visualization import plot_system_deflection, log_system_data
 import matplotlib.pyplot as plt
 import numpy as np
+from frame_solver import FrameSystem
+from visualization import plot_system_deflection, log_system_data
 
 A = 1e-4
 I = 3e-6
@@ -24,7 +24,6 @@ element_1.add_distributed_axial_load(lambda t: 2.4e3 * np.ones_like(t))
 
 element_2 = system.create_element(node_b, node_c, A, I, E)
 
-system.weld_elements(element_1, element_2)
 
 system.solve()
 
@@ -32,6 +31,6 @@ system.solve()
 fig, axes = plt.subplots(1, 1)
 
 log_system_data(system)
-plot_system_deflection(axes, system, 100)
+plot_system_deflection(axes, system, deflection_scaling=100)
 
 plt.show()

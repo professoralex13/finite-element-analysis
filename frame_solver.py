@@ -53,6 +53,10 @@ class Node:
         self.applied_moment = force
 
     def add_extra_rotation_dof(self, force: float, elements: list[FrameElement]):
+        """
+        Adds an extra rotational degree of freedom to this noded,
+        given a force applied and a list of elements attached to this DOF
+        """
         self.extra_rotation_dofs.append((force, elements))
 
     def fix_x(self):
@@ -145,7 +149,10 @@ class FrameElement:
         self.distributed_shear_loads.append(load)
 
     def add_point_shear_load(self, load: float, point: float):
-        """Adds a point shear load at some point across the element (position measured between 0 and 1)"""
+        """
+        Adds a point shear load at some point across
+        the element (position measured between 0 and 1)
+        """
         self.point_shear_loads.append((load, point))
 
     def add_distributed_axial_load(
@@ -182,7 +189,10 @@ class FrameElement:
         self.add_distributed_angled_load(load, -self.alpha())
 
     def add_point_axial_load(self, load: float, point: float):
-        """Adds a point axial load at some point across the element (position measured between 0 and 1)"""
+        """
+        Adds a point axial load at some point across
+        the element (position measured between 0 and 1)
+        """
         self.point_axial_loads.append((load, point))
 
     def get_local_equivalent_distributed_load(self):
@@ -205,7 +215,9 @@ class FrameElement:
         axial_integrand = self.get_axial_shape_functions(t) * axial_load
 
         # Integrate the distributed load for each shape function
-        f_eq: np.ndarray = np.trapezoid(shear_integrand + axial_integrand, t, axis=1)  # type: ignore[assignment]
+        f_eq: np.ndarray = np.trapezoid(
+            shear_integrand + axial_integrand, t, axis=1
+        )  # type: ignore[assignment]
 
         # Unnormalize based on element length
         return self.length() * f_eq
@@ -250,7 +262,8 @@ class FrameElement:
         l = np.linalg.norm(self.end.position - self.start.position)
 
         # Shape functions are only relevant for the Beam components of the Frame
-        # To simplify downstream logic, n0 and n3 are set to zero to represent the isolation between axial force and lateral deflection
+        # To simplify downstream logic, n0 and n3 are set to zero
+        # to represent the isolation between axial force and lateral deflection
 
         z = np.zeros_like(t)
 
@@ -375,12 +388,15 @@ class FrameElement:
         return self.get_transformation_matrix().T @ self.get_local_forces()
 
     def get_axial_force(self):
+        """Gets the axial force applied to this element"""
         return self.get_local_forces()[3]
 
     def get_axial_stress(self):
+        """Gets the axial stress present in this element"""
         return self.get_axial_force() / self.area
 
     def get_axial_strain(self):
+        """Gets the axial strain present in this element"""
         delta_l = self.get_local_deflections()[3] - self.get_local_deflections()[0]
 
         return delta_l / self.length()
@@ -488,7 +504,7 @@ class FrameSystem:
                         self.end_moment_indices[i] = moment_index
                     elif offset != -1:
                         raise ValueError(
-                            f"Element {i + 1} is an extra DOF for node {node.name} but is not attached to it any any end"
+                            f"Element {i + 1} is not attached to {node.name} but was added as DOF"
                         )
 
         for i, element in enumerate(self.elements):
@@ -530,6 +546,8 @@ class FrameSystem:
         )
 
         for element in self.elements:
+            assert element.assembly_matrix is not None
+
             element.global_deflections = (
                 element.assembly_matrix.T @ self.dof_deflections
             )

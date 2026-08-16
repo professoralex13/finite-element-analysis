@@ -27,16 +27,11 @@ element_2 = system.create_element(node_a, node_c, A, I, E)
 
 element_3 = system.create_element(node_c, node_b, A, I, E)
 
-system.weld_elements(element_1, element_2)
-system.weld_elements(element_2, element_3)
-system.weld_elements(element_1, element_3)
-
 system.solve()
-
 
 fig, axes = plt.subplots(1, 1)
 
 log_system_data(system)
-plot_system_deflection(axes, system, 5)
+plot_system_deflection(axes, system, deflection_scaling=5)
 
 plt.show()

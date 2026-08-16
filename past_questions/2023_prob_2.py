@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from frame_solver import FrameSystem
-from visualization import plot_system, log_system_data
+from visualization import plot_system_deflection, log_system_data
 
 A = 2e-4
 I = 1e-4
@@ -25,20 +25,16 @@ node_d = system.create_node("D", 0, 0)
 node_d.fixed_joint()
 
 G = 9.81
-width = 4
-density = 1e3
+WIDTH = 4
+DENSITY = 1e3
 
-max_pressure = density * G * depth
-
+MAX_PRESSURE = DENSITY * G * depth
 
 element_1 = system.create_element(node_a, node_b, A, I, E)
 element_2 = system.create_element(node_b, node_c, A, I, E)
-element_2.add_distributed_shear_load(lambda t: -max_pressure * width * t)
+element_2.add_distributed_shear_load(lambda t: -MAX_PRESSURE * WIDTH * t)
 element_3 = system.create_element(node_d, node_c, A, I, E)
-element_3.add_distributed_shear_load(lambda t: max_pressure * width * np.ones_like(t))
-
-system.weld_elements(element_1, element_2)
-system.weld_elements(element_2, element_3)
+element_3.add_distributed_shear_load(lambda t: MAX_PRESSURE * WIDTH * np.ones_like(t))
 
 system.solve()
 
@@ -49,6 +45,6 @@ print(element_1.get_axial_strain() * 1e6)
 fig, axes = plt.subplots(1, 1)
 
 log_system_data(system)
-plot_system(axes, system, 50)
+plot_system_deflection(axes, system, deflection_scaling=50)
 
 plt.show()

@@ -2,11 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from frame_solver import FrameSystem
 from visualization import (
-    plot_system_deflection,
     plot_system_dofs,
-    log_system_data,
-    print_matrix,
-    print_matrix_rounded,
 )
 
 A = 1e-3

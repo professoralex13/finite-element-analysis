@@ -1,7 +1,7 @@
-from frame_solver import FrameSystem
-from visualization import plot_system_deflection, log_system_data
 import matplotlib.pyplot as plt
 import numpy as np
+from frame_solver import FrameSystem
+from visualization import plot_system_deflection, log_system_data
 
 A = 1e-4
 I = 3e-6
@@ -28,18 +28,11 @@ element_2.add_distributed_shear_load(lambda t: -10e3 * np.ones_like(t))
 element_3 = system.create_element(node_a, node_c, A, I, E)
 element_4 = system.create_element(node_c, node_d, A, I, E)
 
-system.weld_elements(element_1, element_2)
-system.weld_elements(element_1, element_3)
-system.weld_elements(element_2, element_3)
-system.weld_elements(element_2, element_4)
-system.weld_elements(element_3, element_4)
-
 system.solve()
-
 
 fig, axes = plt.subplots(1, 1)
 
 log_system_data(system)
-plot_system_deflection(axes, system, 20)
+plot_system_deflection(axes, system, deflection_scaling=20)
 
 plt.show()

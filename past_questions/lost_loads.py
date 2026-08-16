@@ -1,7 +1,7 @@
-from frame_solver import FrameSystem
-from visualization import plot_system_deflection, log_system_data
 import matplotlib.pyplot as plt
 import numpy as np
+from frame_solver import FrameSystem
+from visualization import plot_system_deflection, log_system_data
 
 A = 4e-4
 I = 1e-5
@@ -22,6 +22,6 @@ system.solve()
 fig, axes = plt.subplots(1, 1)
 
 log_system_data(system)
-plot_system_deflection(axes, system, 20)
+plot_system_deflection(axes, system, deflection_scaling=20)
 
 plt.show()
