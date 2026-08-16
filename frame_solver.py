@@ -458,13 +458,11 @@ class FrameSystem:
     def solve(self):
         """Finalizes the structure of the system and calculates deflections and forces"""
 
-        # To simplify logic, nodal force ordering has all lateral DOFs first,
-        # with rotational forces at the end
         self.nodal_forces = np.array([])
 
         # Lateral DOF indices are mapped by the Node Name
         # Rotational DOF indices are mapped by the element index
-        # In a worst case, every element may have its own two moment DOFs
+        # In a worst case, every element may have its own two moment DOFs (in case of pin joints instead of welds)
 
         # For each node, apply the nodal forces to the total Q array
         for node in self.nodes.values():
@@ -508,7 +506,7 @@ class FrameSystem:
                         )
 
         for i, element in enumerate(self.elements):
-            # The second pass through elements generates assembly matrices
+            # Loop through the elements and generate assembly matrices
 
             start = element.start
             end = element.end
@@ -536,15 +534,19 @@ class FrameSystem:
             element.assembly_matrix = assembly_matrix
 
             # After the assembly matrix has been generated, calculate the equivalent nodal
-            # loading due to point and distributed loads, and append to the total nodal forces
+            # loading due to point and distributed loads along elements,
+            # then append that to the total nodal forces
             self.nodal_forces += (
                 element.assembly_matrix @ element.get_global_equivalent_loading()
             )
 
+        # Run the linear algebra to solve for the deflections at each DOF
         self.dof_deflections = np.linalg.solve(
             self.get_total_stiffness(), self.nodal_forces
         )
 
+        # Calculate the global oriented deflections for each elements DOFs
+        # (Each element has 6 DOFs, but not all of these may be DOFs for the whole system)
         for element in self.elements:
             assert element.assembly_matrix is not None
 
@@ -552,6 +554,9 @@ class FrameSystem:
                 element.assembly_matrix.T @ self.dof_deflections
             )
 
+        # Pass through the nodes and calcualte reaction loads by summing
+        # Applied loads from each element without the contributions
+        # from equivalent loads (distributed and point)
         for node in self.nodes.values():
             for element in self.elements:
                 if element.start == node:
