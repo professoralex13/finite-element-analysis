@@ -405,8 +405,8 @@ class FrameElement:
 class FrameSystem:
     """Represents a finite element analysis system using frame elements"""
 
-    nodes: dict[str, Node] = {}
-    elements: list[FrameElement] = []
+    nodes: dict[str, Node]
+    elements: list[FrameElement]
 
     nodal_forces: np.ndarray
     dof_deflections: np.ndarray
@@ -417,6 +417,8 @@ class FrameSystem:
     end_moment_indices: dict[int, int]
 
     def __init__(self):
+        self.nodes = {}
+        self.elements = []
         self.x_dof_indices = {}
         self.y_dof_indices = {}
         self.start_moment_indices = {}
