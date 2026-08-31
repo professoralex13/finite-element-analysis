@@ -147,23 +147,32 @@ def equilibrium_test(
 
 
 equilibrium_test(
-    "C", system.nodes["B"], [system.nodes["A"], system.nodes["C"]], system.elements[:2]
+    "A",
+    system.nodes["F"],
+    [system.nodes["F"], system.nodes["G"]],
+    system.elements[-1:],
 )
+
 
 equilibrium_test(
     "B",
     system.nodes["D"],
-    [system.nodes["A"], system.nodes["C"]],
-    system.elements[:3],
+    [system.nodes["G"], system.nodes["E"]],
+    system.elements[3:],
+)
+
+equilibrium_test(
+    "C", system.nodes["B"], [system.nodes["E"], system.nodes["G"]], system.elements[2:]
 )
 
 
 equilibrium_test(
-    "A",
-    system.nodes["F"],
-    [system.nodes["A"], system.nodes["C"], system.nodes["E"]],
-    system.elements[:6],
+    "All",
+    system.nodes["A"],
+    list(system.nodes.values()),
+    system.elements,
 )
+
 
 print("Max Element Normal Stresses")
 for i, element in enumerate(system.elements):
@@ -182,12 +191,6 @@ print()
 for i, element in enumerate(system.elements, start=1):
     print(f"Element {i} Assembly Matrix:")
     print_matrix_rounded(element.assembly_matrix)
-fig, (axis1, axis2) = plt.subplots(1, 2)
-
-plot_system_deflection(axis1, system)
-plot_system_dofs(axis2, system, arrow_scale=0.05)
-
-plt.show()
 
 
 #
@@ -226,6 +229,11 @@ max_stresses = [
 for i, stress in enumerate(max_stresses):
     print(f"Element {i + 1}: {stress * 1e-6:.1f} MPa")
 
+print("Tip Deflections")
+print_matrix(system.dof_deflections[-3:], scale_coef=1e-3)
+print()
+
+
 YIELD_STRENGTH = 360e6
 
 max_pressure = (350e6 / max(max_stresses)) * PRESSURE / FOS
@@ -247,7 +255,7 @@ system.elements[6].add_distributed_shear_load(lambda _: udl_new)
 system.solve()
 
 print("Tip Deflections")
-print_matrix(system.elements[-1].get_local_deflections()[3:], scale_coef=1e-3)
+print_matrix(system.dof_deflections[-3:], scale_coef=1e-3)
 print()
 
 print("Bottom Support Reaction:")
@@ -263,9 +271,7 @@ timoshenko_system.elements[6].add_distributed_shear_load(lambda _: udl_new)
 timoshenko_system.solve()
 
 print("Tip Deflections (Timoshenko):")
-print_matrix(
-    timoshenko_system.elements[-1].get_local_deflections()[3:], scale_coef=1e-3
-)
+print_matrix(timoshenko_system.dof_deflections[-3:], scale_coef=1e-3)
 print()
 
 print("Bottom Support Reaction (Timoshenko):")
@@ -283,14 +289,17 @@ euler_transverse = np.array(
     [el.get_change_in_tranverse_deflection() for el in system.elements]
 )
 
-transverse_difference = timoshenko_transverse - euler_transverse
+transverse_error = (
+    np.abs(euler_transverse - timoshenko_transverse) / timoshenko_transverse
+)
 
-total = [["Element", "Timoshenko", "Euler", "Diff"]]
+
+total = [["Element", "Timoshenko", "Euler", "Error"]]
 for i, (timo, euler, diff) in enumerate(
-    zip(timoshenko_transverse, euler_transverse, transverse_difference), start=1
+    zip(timoshenko_transverse, euler_transverse, transverse_error), start=1
 ):
     total.append(
-        [str(i), f"{timo * 1e3:.2f}", f"{euler * 1e3:.2f}", f"{diff * 1e3:.2f}"]
+        [str(i), f"{timo * 1e3:.3f}", f"{euler * 1e3:.3f}", f"{diff * 1e2:.1f}%"]
     )
 
 print_table(total, suffix="x 1e-3")
@@ -305,14 +314,14 @@ euler_rotation = np.array(
     [el.get_change_in_rotation_deflection() for el in system.elements]
 )
 
-rotation_difference = timoshenko_rotation - euler_rotation
+rotation_error = np.abs(euler_rotation - timoshenko_rotation) / timoshenko_rotation
 
 total = [["Element", "Timoshenko", "Euler", "Diff"]]
 for i, (timo, euler, diff) in enumerate(
-    zip(timoshenko_rotation, euler_rotation, rotation_difference), start=1
+    zip(timoshenko_rotation, euler_rotation, rotation_error), start=1
 ):
     total.append(
-        [str(i), f"{timo * 1e3:.2f}", f"{euler * 1e3:.2f}", f"{diff * 1e3:.2f}"]
+        [str(i), f"{timo * 1e3:.3f}", f"{euler * 1e3:.3f}", f"{diff * 1e2:.1f}%"]
     )
 
 print_table(total, suffix="x 1e-3")
@@ -375,3 +384,10 @@ print(
 print(
     f"Total Modified Element Length: {sum(element.length() for element in modified_system.elements)}"
 )
+
+fig, (axis1, axis2) = plt.subplots(1, 2)
+
+plot_system_deflection(axis1, system)
+plot_system_dofs(axis2, system, arrow_scale=0.05)
+
+plt.show()
