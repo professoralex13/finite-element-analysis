@@ -10,16 +10,31 @@ import numpy as np
 ZERO_THRESHOLD = 1e-10
 
 
-def format_number(x, decimals, max_len=None):
+def print_table(table: list[list[str]], suffix: str | None = None):
+    max_len = max(len(item) for sublist in table for item in sublist)
+
+    for i, row in enumerate(table):
+        print("|", end="")
+
+        for j, item in enumerate(row):
+            if j != 0:
+                print(" ", end="")
+            if str(item) == "0":
+                print(f"{item:^{max_len}}", end="")
+            else:
+                print(f"{item:>{max_len}}", end="")
+        if suffix is not None and i == len(table) // 2:
+            print(f"| {suffix}")
+        else:
+            print("|")
+
+
+def format_number(x, decimals):
     """Formats a number with a given number of decimals and padding"""
     if abs(x) > ZERO_THRESHOLD:
-        return (
-            f"{x:>{max_len}.{decimals}f}"
-            if max_len is not None
-            else f"{x:.{decimals}f}"
-        )
+        return f"{x:.{decimals}f}"
 
-    return f"{0:^{max_len}}" if max_len is not None else str(0)
+    return "0"
 
 
 def print_matrix(matrix, decimals=4, scale_coef=None):
@@ -32,21 +47,16 @@ def print_matrix(matrix, decimals=4, scale_coef=None):
     # Scale matrix values
     printed_matrix = matrix / scale_coef
 
-    max_len = max(len(format_number(x, decimals)) for x in printed_matrix.flatten())
+    table = [
+        (
+            [format_number(row, decimals)]
+            if isinstance(row, np.float64)
+            else [format_number(x, decimals) for x in row]
+        )
+        for row in printed_matrix
+    ]
 
-    for i, row in enumerate(printed_matrix):
-        print("|", end="")
-        if isinstance(row, np.float64):
-            print(format_number(row, decimals, max_len=max_len), end="")
-        else:
-            print(
-                " ".join(format_number(x, decimals, max_len=max_len) for x in row),
-                end="",
-            )
-        if i == len(printed_matrix) // 2:
-            print(f"| x {scale_coef:.0e}")
-        else:
-            print("|")
+    print_table(table, f"x {scale_coef:.0e}")
 
 
 def print_matrix_rounded(matrix):

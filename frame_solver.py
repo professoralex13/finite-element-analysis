@@ -401,6 +401,84 @@ class FrameElement:
 
         return delta_l / self.length()
 
+    def get_change_in_tranverse_deflection(self) -> float:
+        return self.get_local_deflections().dot(np.array([0, -1, 0, 0, 1, 0]))
+
+    def get_change_in_rotation_deflection(self) -> float:
+        return self.get_local_deflections().dot(np.array([0, 0, -1, 0, 0, 1]))
+
+
+class TimoshenkoFrameElement(FrameElement):
+    """An improved version of FrameElement which uses a more complex stiffness system"""
+
+    shear_modulus: float
+    shear_area: float
+
+    def __init__(
+        self,
+        start: Node,
+        end: Node,
+        area: float,
+        second_moment_of_inertia: float,
+        elastic_modulus: float,
+        shear_modulus: float,
+        shear_area: float,
+    ):
+        super().__init__(start, end, area, second_moment_of_inertia, elastic_modulus)
+
+        self.shear_modulus = shear_modulus
+        self.shear_area = shear_area
+
+    def get_local_stiffness(self):
+        l = np.linalg.norm(self.end.position - self.start.position)
+
+        beta = self.area * l**2 / self.second_moment_of_inertia
+
+        coef = self.elastic_modulus * self.second_moment_of_inertia / (l**3)
+
+        phi = (12 * self.elastic_modulus * self.second_moment_of_inertia) / (
+            self.shear_modulus * self.shear_area * l**2
+        )
+
+        return coef * np.array(
+            [
+                [beta, 0, 0, -beta, 0, 0],
+                [
+                    0,
+                    12 / (1 + phi),
+                    6 * l / (1 + phi),
+                    0,
+                    -12 / (1 + phi),
+                    6 * l / (1 + phi),
+                ],
+                [
+                    0,
+                    6 * l / (1 + phi),
+                    (4 + phi) * l**2 / (1 + phi),
+                    0,
+                    -6 * l / (1 + phi),
+                    (2 - phi) * l**2 / (1 + phi),
+                ],
+                [-beta, 0, 0, beta, 0, 0],
+                [
+                    0,
+                    -12 / (1 + phi),
+                    -6 * l / (1 + phi),
+                    0,
+                    12 / (1 + phi),
+                    -6 * l / (1 + phi),
+                ],
+                [
+                    0,
+                    6 * l / (1 + phi),
+                    (2 - phi) * l**2 / (1 + phi),
+                    0,
+                    -6 * l / (1 + phi),
+                    (4 + phi) * l**2 / (1 + phi),
+                ],
+            ]
+        )
+
 
 class FrameSystem:
     """Represents a finite element analysis system using frame elements"""
@@ -447,6 +525,31 @@ class FrameSystem:
             area,
             moment_of_inertia,
             elastic_modulus,
+        )
+
+        self.elements.append(element)
+
+        return element
+
+    def create_element_timoshenko(
+        self,
+        node_1: Node,
+        node_2: Node,
+        area: float,
+        moment_of_inertia: float,
+        elastic_modulus: float,
+        shear_modulus: float,
+        shear_area: float,
+    ) -> TimoshenkoFrameElement:
+        """Creates a new element connecting two nodes with a given A, I, E"""
+        element = TimoshenkoFrameElement(
+            node_1,
+            node_2,
+            area,
+            moment_of_inertia,
+            elastic_modulus,
+            shear_modulus,
+            shear_area,
         )
 
         self.elements.append(element)
