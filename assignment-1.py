@@ -241,7 +241,7 @@ max_pressure = (350e6 / max(max_stresses)) * PRESSURE / FOS
 max_speed = math.sqrt(max_pressure / 0.6)
 
 print(
-    f"Max allowable wind speed if Max stress is 350MPa with FOS of {FOS}: {max_speed:.0f}m/s ({max_speed * 3.6:.0f}km/h)"
+    f"Max allowable wind speed if Max stress is 350MPa with FOS of {FOS}: {max_pressure * 1e-3:.2f}kPa {max_speed:.0f}m/s ({max_speed * 3.6:.0f}km/h)"
 )
 
 system = build_structure()
@@ -351,8 +351,8 @@ node_e = modified_system.create_node("E", 0.75, 1.5)
 
 modified_system.create_element_timoshenko(node_d, node_e, A, I, E, G, AS)
 
-modified_system.elements[3].add_distributed_shear_load(lambda _: UDL)
-modified_system.elements[4].add_distributed_shear_load(lambda _: UDL)
+modified_system.elements[-2].add_distributed_shear_load(lambda _: UDL)
+modified_system.elements[-1].add_distributed_shear_load(lambda _: UDL)
 
 modified_system.solve()
 
@@ -373,8 +373,9 @@ max_pressure = (350e6 / max(max_stresses)) * PRESSURE / FOS
 
 max_speed = math.sqrt(max_pressure / 0.6)
 
+
 print(
-    f"Max allowable wind speed if Max stress is 350MPa with FOS of {FOS} on modified system: {max_speed:.0f}m/s ({max_speed * 3.6:.0f}km/h)"
+    f"Max allowable wind speed if Max stress is 350MPa with FOS of {FOS} on modified system: {max_pressure * 1e-3:.2f}kPa, {max_speed:.0f}m/s ({max_speed * 3.6:.0f}km/h)"
 )
 
 print(
@@ -385,9 +386,14 @@ print(
     f"Total Modified Element Length: {sum(element.length() for element in modified_system.elements)}"
 )
 
+
 fig, (axis1, axis2) = plt.subplots(1, 2)
+fig, element_axes = plt.subplots(1, len(system.elements))
 
 plot_system_deflection(axis1, system)
-plot_system_dofs(axis2, system, arrow_scale=0.05)
+plot_system_dofs(axis2, system, arrow_scale=0.05, title="Modified System DOFs")
+
+for element, axis in zip(system.elements, element_axes):
+    plot_element_fbd(axis, system, element, arrow_scale=0.02)
 
 plt.show()
